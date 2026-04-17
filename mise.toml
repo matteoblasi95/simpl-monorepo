@@ -134,7 +134,7 @@ run = [
 [tasks."destruction:all"]
 description = "Completely removes the development environment:"
 run = [
-  { tasks = [ "cluster:destroy", "cluster:forward-node-down", "cluster:redpanda:down", "zscaler:remove-jdk" ] },
+  { tasks = [ "cluster:destroy", "cluster:forward-node-down", "zscaler:remove-jdk" ] },
 ]
 
 [tasks."initialization:build:code"]
@@ -159,7 +159,6 @@ run = [
   { task = "cluster:create" },
   { task = "initialization:zscaler" },
   { task = "cluster:forward-node-up" },
-  { task = "cluster:redpanda:up" },
   { task = "cluster:authority-install-or-upgrade" },
   { task = "code:test-automation:autoconfigure-client-secret" },
   { task = "cluster:initialization_ejbca" },
@@ -269,14 +268,11 @@ run = "{{vars.run_cluster_forward_node_compose}}"
 description = "Starts port forwarding services."
 run = "{{vars.run_cluster_forward_node_compose}} up -d"
 
-[tasks."cluster:redpanda:compose"]
-run = "docker-cli-plugin-docker-compose -p simpl-redpanda -f .config/docker/redpanda/docker-compose.yaml"
-
 [tasks."cluster:redpanda:up"]
-run = "docker-cli-plugin-docker-compose -p simpl-redpanda -f .config/docker/redpanda/docker-compose.yaml up -d"
+run = { task = "cluster:kube-redpanda-scale-1" }
 
 [tasks."cluster:redpanda:down"]
-run = "docker-cli-plugin-docker-compose -p simpl-redpanda -f .config/docker/redpanda/docker-compose.yaml down"
+run = { task = "cluster:kube-redpanda-scale-0" }
 
 [tasks."simpl-services:compose"]
 run = "docker-cli-plugin-docker-compose -p simpl-services --env-file=./simpl-services.env -f .config/docker/simpl-services/docker-compose.yaml"
@@ -321,7 +317,6 @@ description = "Deletes the Minikube cluster."
 run = [
   { task = "cluster:forward-node-down" },
   "minikube delete --profile=simpl-control-plane",
-  { task = "cluster:redpanda:down" },
   { task = "simpl-services:down" },
   { task = "simpl-services-fe:down" },
 ]
@@ -332,7 +327,6 @@ run = [
   { task = "cluster:forward-node-down" },
   "minikube start --namespace local-authority --network=simpl-network --driver=docker --profile=simpl-control-plane",
   { task = "cluster:forward-node-up" },
-  { task = "cluster:redpanda:up" },
 ]
 
 [tasks."cluster:status"]
@@ -340,7 +334,6 @@ description = "Shows the status of the Minikube cluster."
 run = [
   "minikube status --profile=simpl-control-plane",
   { task = "cluster:forward-node-compose ps -a" },
-  { task = "cluster:redpanda:compose ps -a" },
 ]
 
 [tasks."cluster:stop"]
@@ -348,7 +341,6 @@ description = "Stops the Minikube cluster and disables port forwarding."
 run = [
   { task = "cluster:forward-node-down" },
   "minikube stop --profile=simpl-control-plane",
-  { task = "cluster:redpanda:down" },
   { task = "simpl-services:down" },
   { task = "simpl-services-fe:down" },
 ]
@@ -422,13 +414,13 @@ run = [
   --dependency-update \
   --create-namespace \
   -n local-authority \
+  --timeout 20m \
   --set keycloak.livenessProbe.enabled=false \
   --set-string postgrest.primary.initdb.scripts.restoreEjbca="" \
   local-authority \
   {{vars.pathHelmLocalAuthority}}
   """,
  "kubens local-authority",
- { task = "cluster:kube-redpanda-scale-0" },
 ]
 
 [tasks."cluster:participant-fe-install-or-upgrade"]
@@ -465,12 +457,17 @@ run = "helm upgrade simpl-fe simpl-fe-charts/simpl-fe --version {{arg(name=\"ver
 [tasks."cluster:fe-mono-install-participant"]
 run = "helm upgrade simpl-fe simpl-fe-charts/simpl-fe --version {{arg(name=\"version\")}} --values helm-charts/fe-part-values.yaml"
 
-
 [tasks."cluster:kube-redpanda-scale-0"]
- run = [
-   "kubectl -n local-authority scale --replicas 0 deployment.apps/redpanda",
-   "kubectl -n local-authority scale --replicas 0 deployment.apps/redpanda-console",
- ]
+run = [
+    "kubectl -n local-authority scale statefulset.apps/local-authority --replicas 0",
+    "kubectl -n local-authority scale deployment.apps/local-authority-console --replicas 0",
+]
+
+[tasks."cluster:kube-redpanda-scale-1"]
+run = [
+    "kubectl -n local-authority scale statefulset.apps/local-authority --replicas 1",
+    "kubectl -n local-authority scale deployment.apps/local-authority-console --replicas 1",
+]
 
 [tasks."cluster:authority-uninstall"]
 description = "Uninstalls the authority Helm chart."

@@ -10,6 +10,7 @@ services:
     image: code.europa.eu:4567/simpl/simpl-open/development/iaa/authentication_provider:${SIMPL_SERVICE_AUTHENTICATION_PROVIDER_VERSION}
     ports:
       - "8105:8105"
+      - "5005:5005"
     networks:
     - simpl-network
     env_file:
@@ -136,6 +137,7 @@ services:
     image: code.europa.eu:4567/simpl/simpl-open/development/iaa/users-roles:${SIMPL_SERVICE_USERS_ROLES_VERSION}
     ports:
       - "8101:8101"
+      - "5006:5005"
     networks:
     - simpl-network
     env_file:
